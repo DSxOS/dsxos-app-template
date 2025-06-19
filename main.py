@@ -42,14 +42,15 @@ start_time = datetime.now(timezone.utc)
 interval = raw_data["params"]["interval"]
 min_period = raw_data["params"]["min_period"]
 
+# get readings (time and value) of last prognosis about given datapoint
 prod = [{"time": r["time"], "value": r["value"]/1000} for r in query_utils.get_last_prognosis_readings(raw_data["params"]["productionPrognosisIdentifier"])] # production prognosis
 cons = [{"time": r["time"], "value": r["value"]/1000} for r in query_utils.get_last_prognosis_readings(raw_data["params"]["consumptionPrognosisIdentifier"])] # consumption prognosis
 
-# Calculates how many values are in forecast
+# Calculate how many values are in forecast
 count = count = Util.calculate_count(prod, start_time, interval)
-# Gets datapoint's last reading value
+# Get datapoint's last reading value
 ESS_kW = query_utils.get_datapoint(raw_data["params"]["ess_P_id"])[0]["lastReadingValue"]/1000 # storage capacity 
-# Gets datapoint's id
+# Get datapoint's id
 result_dp_id = query_utils.get_datapoint(raw_data["params"]["results"])[0]["id"]
 
 ########################################################################
@@ -57,7 +58,7 @@ logger.info(f"len(prod): {len(prod)}")
 logger.info(f"len(cons): {len(cons)}")
 ########################################################################
 
-# Converts list-of-dict model into a DataFrame
+# Convert list-of-dict model into a DataFrame
 def model_to_df(m):
     st = 0
     en = len(m.T)
@@ -90,23 +91,26 @@ def model_to_df(m):
     print(df)
     return df
 
-# Finds a common time range for two or more different forecasts
+# Find a common time range for two or more different forecasts
 time_range = Util.find_common_time_range([cons, prod]) 
-# Calculates the length of the common time range
+# Calculate the length of the common time range
 period = datetime.fromisoformat(time_range["end"]) - datetime.fromisoformat(time_range["start"])
-
+# If common time range is bigger than given min_period
 if int(period.total_seconds()) > min_period:
     time_range_start = datetime.fromisoformat(time_range["start"])
     time_range_end = datetime.fromisoformat(time_range["end"])
     # count = Util.calculate_count(cons, start_time, interval)
-    # initial = query_utils.get_datapoint(raw_data["params"]["npPriceIdentifier"])[0]["lastReadingValue"]
+    initial = query_utils.get_datapoint(raw_data["params"]["npPriceIdentifier"])[0]["lastReadingValue"]
 
     print(f"count: {count}")
     print(f"time_range: {time_range}")
-    # print(f"initial: {initial}")
+    print(f"initial: {initial}")
     print(f"period: {period.total_seconds()} seconds")
-
-    # np_extracted = Util.generate_result_series(np, start_time, time_range_end, interval, initial)
+    
+    # regenerates prognosis values starting with start time and initial value and with given interval
+    np_extracted = Util.generate_result_series(np, start_time, time_range_end, interval, initial)
+    
+    # extracts prognosis values starting with start time, with given interval and common time range endtime
     cons_extracted = Util.extract_prognosis_values(cons, "consumption", start_time, time_range_end, interval)
     prod_extracted = Util.extract_prognosis_values(prod, "production", start_time, time_range_end, interval)
 
@@ -114,6 +118,7 @@ if int(period.total_seconds()) > min_period:
     logger.info(f"len(prod_extracted): {len(prod_extracted)}")
     logger.info(f"len(cons_extracted): {len(cons_extracted)}")
     ########################################################################
+    
     assert len(prod_extracted) == len(cons_extracted), "len(prod_extracted) != len(cons_extracted)"
     
     data = pd.DataFrame({
@@ -230,15 +235,21 @@ solver = SolverFactory('glpk', options={'tmlim': 300})
 results = solver.solve(m)
 results.write()
 
+# Debug the model to log infeasible constraints, variable values, and constraint statuses 
+# and save diagnostic output to a file
 debug_model(m)
 
+# Check that the solver completed successfully with an optimal or feasible result
 if (results.solver.status == SolverStatus.ok) and (
     (results.solver.termination_condition == TerminationCondition.optimal) 
     or (results.solver.termination_condition == TerminationCondition.feasible)
     ):
+    
     # Format results as data frame
     results_df = model_to_df(m)
-
+    
+    # Use the variable from 'results_df' if available;  
+    # otherwise, fall back to the previous prognosis and readings.
     if (len(results_df) == 0):
         # Use old prognosis, if it exists
         logger.warning(f"Optimization failed - empty result. Using old power prognosis.")
@@ -246,22 +257,23 @@ if (results.solver.status == SolverStatus.ok) and (
     else:
         # use optimized results
         essPowerPrognosisRaw = results_df["prosumption"].values * 1000
-
+        
+    # Create a list of prognosis readings with corresponding timestamps
     essPowerPlanned =[]
-
     for i, value in enumerate(essPowerPrognosisRaw):
         reading_time = start_time + timedelta(seconds=i * interval)  
         essPowerPlanned.append({
             "time": reading_time.isoformat().replace('+00:00', 'Z'),
             "value": value
         })
-
+        
+    # Construct the prognosis payload with datapoint ID, timestamp, and planned ESS power readings
     prognosis_payload = {
         "datapointId": result_dp_id,
         "time": start_time.isoformat().replace('+00:00', 'Z'),
         "readings":essPowerPlanned
     }
-
+    # POST datapoint prognosis and prognosis readings
     response = query_utils.post_datapoint_prognosis(prognosis_payload)
     logger.info(f"datapoint prognosis was posted: {response}")
         
