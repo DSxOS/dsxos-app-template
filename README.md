@@ -1,4 +1,5 @@
-# dsxos-app-template
+# DSxOS Python Application Template
+Description how to include the application in your site repository.
 
 ## Install into your site config repo
 Choose one approach and adjust names/URLs as needed.
