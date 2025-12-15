@@ -48,7 +48,7 @@ class Query:
 
     def _request(self, method, endpoint, **kwargs):
         url = f"{self.base_url}{endpoint}"
-        
+        self.logger.debug(f"Request url: {url} kwargs: {kwargs}")
         try:
             response = requests.request(
                 method,
@@ -58,6 +58,11 @@ class Query:
                 **kwargs
             )
             response.raise_for_status()
+            
+            self.logger.debug(
+                "HTTP %s %s -> %s %s",
+                method, response.url, response.status_code, response.text[:500]
+            )   
 
             if response.content:
                 return response.json()
