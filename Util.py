@@ -11,7 +11,7 @@ def calculate_count(prs, start, interval_seconds):
     if not prs:
         return 0
 
-    first_time = datetime.fromisoformat(prs[0]["time"]) 
+    first_time = datetime.fromisoformat(prs[0]["time"]) #.replace("+00:00", "Z"))
     start_difference = int((first_time - start).total_seconds())
     print(f"first_time: {first_time} --- start: {start} --- start difference: {start_difference}")
     if start_difference > 0: 
@@ -39,7 +39,7 @@ def parse_time(time_val: Union[str, datetime]) -> datetime:
     if isinstance(time_val, datetime):
         return time_val
     elif isinstance(time_val, str):
-        return datetime.fromisoformat(time_val) 
+        return datetime.fromisoformat(time_val) #.replace("Z", "+00:00"))
     else:
         raise TypeError("time must be string or datetime")
 
@@ -56,12 +56,12 @@ def generate_result_series(
         raise ValueError("interval must be positive")
 
     total_seconds = (end - start).total_seconds()
-    count = int(total_seconds // interval) + 1  
+    count = int(total_seconds // interval) + 1  # include start
 
     for r in prs:
         r["time"] = parse_time(r["time"])
 
-    prs = [r for r in prs if r["time"] <= end]  
+    prs = [r for r in prs if r["time"] <= end]  # lubame ka enne starti
     prs.sort(key=lambda r: r["time"])
 
     result = []
@@ -107,7 +107,7 @@ def extract_prognosis_values(
     for r in prs:
         r["time"] = parse_time(r["time"])
 
-    prs = [r for r in prs if r["time"] <= end] 
+    prs = [r for r in prs if r["time"] <= end]  # võib olla ka enne starti
     prs.sort(key=lambda r: r["time"])
     times = [r["time"] for r in prs]
 
@@ -116,6 +116,7 @@ def extract_prognosis_values(
 
     for i in range(count):
         expected_time = start + timedelta(seconds=i * interval)
+        # Leia viimane väärtus, mille aeg ≤ expected_time
         while current_idx + 1 < len(prs) and prs[current_idx + 1]["time"] <= expected_time:
             current_idx += 1
 
@@ -129,6 +130,15 @@ def extract_prognosis_values(
     return result
 
 def find_common_time_range(series_list: List[List[Dict[str, str]]]) -> Dict[str, str]:
+    """
+    Leiab maksimaalse miinimumaja ja minimaalse maksimumaja aegridade loendist.
+
+    Args:
+        series_list: List massiive, kus iga massiiv on kujul [{"time": "...", "value": ...}, ...]
+
+    Returns:
+        Dict, kus on 'start' ja 'end' ISO 8601 kuupäevadena.
+    """
     min_starts = []
     max_ends = []
 
