@@ -7,7 +7,8 @@ cron: "15 */15 * * * *"                                 # Execution every 15 min
 logLevel: "INFO"                                        # Either text or numeric input
 params:
   apiEndpoint: "http://localhost:8080/api"              # API endpoint to call
-  token: "Bearer YOUR_TOKEN"                            # Authorization token (replace with real one)                 
+  token: "YOUR_TOKEN"                                   # Authorization token (replace with real one)
+  clientId: "api-client-id"                             # API Client ID matching the API token
   production_p_lt_DP_ID: "production_p_lt"              # pointer to dp
   consumption_p_lt_DP_ID: "consumption_p_lt"            # pointer to dp
   elering_nps_price_DP_ID: "elering_nps_price"          # pointer to dp
