@@ -1,16 +1,18 @@
+import logging
 from Query import Query
 import Util
 
 _query_url = None
 _query_headers = None
+_logger = logging.getLogger(__name__)
 
 def init(url, headers, logger=None):
     global _query_url, _query_headers, _logger
     _query_url = url
     _query_headers = headers
-    _logger = logger
-    
-    logger.debug(f"query_utils initialized with URL: {_query_url}")
+    if logger is not None:
+        _logger = logger
+    _logger.debug(f"query_utils initialized with URL: {_query_url}")
     
 # Helper to create Query object
 def Q():
